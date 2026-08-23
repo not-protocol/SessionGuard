@@ -144,30 +144,66 @@ drift out of sync about what actually gets checked.
 
 ## Project layout
 
+Every file that ships in the repo — 37 files total, verified against the
+actual tree (not a collapsed summary):
+
 ```
-src/sessionguard/
-├── cli.py               # command group, wires everything together
-├── engine.py             # run_scan(): the shared check pipeline
-├── storage.py             # persists the last run for `report`
-├── models.py              # Finding / Severity / ScanResult
-├── report_writer.py        # terminal / JSON / HTML rendering
-├── lab_handler.py          # HTTP handler for the synthetic test server
-├── _lab_server.py           # standalone entry point, run as a background process
-├── __main__.py               # `python -m sessionguard`; PyInstaller entry point
-├── checks/
-│   ├── https.py             # HTTPS enforcement + HSTS
-│   ├── cookies.py            # Secure / HttpOnly / SameSite / lifetime
-│   ├── entropy.py             # session-token randomness heuristic
-│   └── exposure.py             # leaked token/secret detection (redacted)
-└── commands/
-    ├── scan.py, audit.py, report.py, lab.py, analyze_token.py, version_cmd.py
-tests/                        # pytest — one file per module above
-packaging/
-├── build.py                   # PyInstaller build script (run per-OS)
-└── README.md                    # packaging instructions
-.github/workflows/build.yml       # CI: tests + matrix build for win/mac/linux
-targets.example.yaml                # copy to targets.yaml (gitignored) and fill in real targets
+sessionguard/
+├── .github/
+│   └── workflows/
+│       └── build.yml            # CI: run tests, then build win/mac/linux binaries
+├── .gitignore
+├── LICENSE
+├── README.md
+├── pyproject.toml
+├── targets.example.yaml           # copy to targets.yaml (gitignored) and fill in real targets
+├── packaging/
+│   ├── README.md                    # packaging instructions
+│   └── build.py                      # PyInstaller build script (run per-OS)
+├── src/sessionguard/
+│   ├── __init__.py                    # __version__
+│   ├── __main__.py                     # `python -m sessionguard`; PyInstaller entry point
+│   ├── _lab_server.py                   # standalone entry point, run as a background process
+│   ├── cli.py                            # command group, wires everything together
+│   ├── engine.py                          # run_scan(): the shared check pipeline
+│   ├── lab_handler.py                      # HTTP handler for the synthetic test server
+│   ├── models.py                            # Finding / Severity / ScanResult
+│   ├── report_writer.py                      # terminal / JSON / HTML rendering
+│   ├── storage.py                              # persists the last run for `report`
+│   ├── checks/
+│   │   ├── __init__.py
+│   │   ├── cookies.py                           # Secure / HttpOnly / SameSite / lifetime
+│   │   ├── entropy.py                            # session-token randomness heuristic
+│   │   ├── exposure.py                            # leaked token/secret detection (redacted)
+│   │   └── https.py                                # HTTPS enforcement + HSTS
+│   └── commands/
+│       ├── __init__.py
+│       ├── analyze_token.py
+│       ├── audit.py
+│       ├── lab.py
+│       ├── report.py
+│       ├── scan.py
+│       └── version_cmd.py
+└── tests/
+    ├── test_audit.py
+    ├── test_cookies.py
+    ├── test_entropy.py
+    ├── test_exposure.py
+    ├── test_https.py
+    ├── test_lab_handler.py
+    ├── test_report.py
+    └── test_storage.py
 ```
+
+Not shown above because they're not source — `.gitignore` deliberately
+excludes them, and they'll appear locally the moment you install/test:
+`__pycache__/` (one `.pyc` per imported module) and `sessionguard.egg-info/`
+(metadata `pip install -e` generates). If you count files with something
+like `find . -type f | wc -l` after running `pip install -e ".[dev]"` and
+`pytest`, expect a noticeably higher number than 37 — that's these caches,
+not missing project files. `dist/sessionguard` (the built binary) is
+similarly a generated artifact, not source — see
+[Installation options](#installation-options).
 
 ## Development
 
