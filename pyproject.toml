@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sessionguard"
+version = "0.2.0"
+description = "Portable CLI tool for auditing session/cookie security on authorized targets"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "click>=8.1",
+    "requests>=2.31",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+lab = ["playwright>=1.40"]
+build = ["pyinstaller>=6.0"]
+
+[project.scripts]
+sessionguard = "sessionguard.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
