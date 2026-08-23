@@ -1,0 +1,139 @@
+"""Render scan results as terminal text, JSON, or a self-contained HTML
+report. All three read from the same ScanResult/Finding objects, so a
+finding can never look different depending on which format you asked
+for.
+"""
+import json
+from html import escape
+
+import click
+
+from sessionguard.models import Severity
+
+_SEVERITY_ORDER = [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM, Severity.LOW]
+
+_SEVERITY_COLORS = {
+    Severity.CRITICAL: "#b91c1c",
+    Severity.HIGH: "#c2410c",
+    Severity.MEDIUM: "#a16207",
+    Severity.LOW: "#4b5563",
+    Severity.INFO: "#15803d",
+}
+
+
+def print_terminal_report(results) -> None:
+    click.echo("SESSIONGUARD SCAN")
+    click.echo("-" * 40)
+
+    total_failed = 0
+    counts = {s: 0 for s in _SEVERITY_ORDER}
+
+    for i, result in enumerate(results, start=1):
+        click.echo(f"\n[{i:02d}/{len(results):02d}] {result.target}")
+        for finding in result.findings:
+            if finding.severity == Severity.INFO:
+                continue
+            symbol = "[OK]  " if finding.passed else "[FAIL]"
+            click.echo(f"  {symbol} {finding.check}: {finding.message}")
+            if not finding.passed:
+                total_failed += 1
+                if finding.severity in counts:
+                    counts[finding.severity] += 1
+
+    click.echo("\n" + "-" * 40)
+    click.echo(f"{len(results)} target(s) scanned")
+    click.echo(f"{total_failed} finding(s)")
+    for sev in _SEVERITY_ORDER:
+        if counts[sev]:
+            click.echo(f"  {counts[sev]} {sev.value}")
+
+
+def render_json(results) -> str:
+    """Machine-readable report — e.g. for a CI pipeline to parse."""
+    payload = [
+        {
+            "target": r.target,
+            "summary": {"failed": len(r.failed)},
+            "findings": [
+                {
+                    "check": f.check,
+                    "severity": f.severity.value,
+                    "message": f.message,
+                    "passed": f.passed,
+                }
+                for f in r.findings
+            ],
+        }
+        for r in results
+    ]
+    return json.dumps(payload, indent=2)
+
+
+def render_html(results) -> str:
+    """Self-contained, offline-viewable HTML report (inline CSS, no
+    external assets — matches the project's no-install, portable goal)."""
+    total_failed = sum(len(r.failed) for r in results)
+    counts = {s: 0 for s in _SEVERITY_ORDER}
+    for r in results:
+        for f in r.failed:
+            if f.severity in counts:
+                counts[f.severity] += 1
+
+    summary_chips = "".join(
+        f'<span class="chip" style="background:{_SEVERITY_COLORS[sev]}">'
+        f'{counts[sev]} {sev.value}</span>'
+        for sev in _SEVERITY_ORDER
+        if counts[sev]
+    )
+
+    target_sections = []
+    for result in results:
+        rows = "".join(
+            f'<tr class="{"fail" if not f.passed else "pass"}">'
+            f'<td><span class="badge" style="background:{_SEVERITY_COLORS[f.severity]}">'
+            f'{escape(f.severity.value)}</span></td>'
+            f'<td>{escape(f.check)}</td>'
+            f'<td>{"FAIL" if not f.passed else "OK"}</td>'
+            f'<td>{escape(f.message)}</td>'
+            f'</tr>'
+            for f in result.findings
+        )
+        target_sections.append(
+            f'<section><h2>{escape(result.target)}</h2>'
+            f'<p class="muted">{len(result.failed)} finding(s)</p>'
+            f'<table><thead><tr><th>Severity</th><th>Check</th>'
+            f'<th>Status</th><th>Message</th></tr></thead>'
+            f'<tbody>{rows}</tbody></table></section>'
+        )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SessionGuard Report</title>
+<style>
+  body {{ font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 900px;
+         margin: 2rem auto; padding: 0 1rem; color: #1f2937; background: #f9fafb; }}
+  h1 {{ margin-bottom: 0.25rem; }}
+  .muted {{ color: #6b7280; font-size: 0.9rem; }}
+  .chip {{ color: white; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.8rem;
+          margin-right: 0.4rem; display: inline-block; }}
+  section {{ background: white; border: 1px solid #e5e7eb; border-radius: 8px;
+            padding: 1rem 1.25rem; margin: 1.25rem 0; }}
+  table {{ width: 100%; border-collapse: collapse; margin-top: 0.5rem; }}
+  th, td {{ text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #f0f1f3;
+           font-size: 0.9rem; vertical-align: top; }}
+  tr.fail {{ background: #fef2f2; }}
+  .badge {{ color: white; border-radius: 4px; padding: 0.1rem 0.5rem; font-size: 0.75rem; }}
+  footer {{ color: #9ca3af; font-size: 0.8rem; margin-top: 2rem; }}
+</style>
+</head>
+<body>
+  <h1>SessionGuard Report</h1>
+  <p class="muted">{len(results)} target(s) scanned · {total_failed} finding(s)</p>
+  <div>{summary_chips}</div>
+  {''.join(target_sections)}
+  <footer>Generated by SessionGuard — audits only systems you own or are explicitly authorized to test.</footer>
+</body>
+</html>
+"""
