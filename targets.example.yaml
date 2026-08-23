@@ -1,0 +1,13 @@
+# Copy this file to targets.yaml (it's gitignored) and list only systems
+# you own or are explicitly authorized to test. `audit` reads this file
+# and scans every entry.
+
+targets:
+  - name: My Website
+    url: https://example.test
+
+  - name: Local Dev
+    url: http://localhost:8000
+
+  - name: Staging
+    url: https://staging.example.test
